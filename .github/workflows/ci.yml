@@ -11,6 +11,21 @@ jobs:
     name: Build, Lint & Test Suite
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password123
+          POSTGRES_DB: avos_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -27,5 +42,12 @@ jobs:
       - name: Typecheck TypeScript
         run: npm run build
 
-      - name: Run Test Suite (Unit, Integration, Security, Failure Injection)
+      - name: Run Database Migrations
+        env:
+          DATABASE_URL: postgresql://postgres:password123@localhost:5432/avos_db
+        run: npm run db:migrate
+
+      - name: Run Test Suite (Unit, Integration, Security, Failure Injection, PostgreSQL)
+        env:
+          DATABASE_URL: postgresql://postgres:password123@localhost:5432/avos_db
         run: npm test
