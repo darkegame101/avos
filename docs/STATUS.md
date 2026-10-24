@@ -62,7 +62,8 @@
 | **Runtime Adapters** | Done | MockAdapter & AutomatonSandboxedAdapter in `src/adapters/` | Real Automaton sandbox test | $0.00 |
 | **PostgreSQL Integration** | Done | SQL migration and `PostgresRepository` written | Connect live Postgres | $0.00 |
 | **Emergency Stop** | Done | Synchronous gate & audit verified in test suite | Staging validation | $0.00 |
-| **CI / CD Pipeline** | Done | `.github/workflows/ci.yml` lint, build & test | Push to GitHub remote | $0.00 |
+| **CI / CD Pipeline** | Done | `.github/workflows/ci.yml` lint, build & test | Active on GitHub Actions | $0.00 |
+| **GitHub Remote Push** | Done | Pushed to `https://github.com/darkegame101/avos.git` (commit `608493e`) | Tracking branch `main` | $0.00 |
 | **Production Cloud Deployment** | **Blocked** | Awaiting Owner Approval per Gate 5 rule | Owner review & sign-off | $0.00 |
 
 ---
