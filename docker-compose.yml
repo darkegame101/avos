@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: avos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: avos_user
+      POSTGRES_PASSWORD: avos_password
+      POSTGRES_DB: avos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U avos_user -d avos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  avos-core:
+    build: .
+    container_name: avos-core
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      DATABASE_URL: postgresql://avos_user:avos_password@postgres:5432/avos_db
+      AVOS_OWNER_TOKEN: ${AVOS_OWNER_TOKEN:-default_local_dev_token_min_32_chars}
+      AVOS_MONTHLY_BUDGET_CAP: 50.00
+      AVOS_DEFAULT_EXPERIMENT_BUDGET: 20.00
+      WORKER_CONCURRENCY: 5
+    ports:
+      - "4000:4000"
+
+volumes:
+  postgres_data:

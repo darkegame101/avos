@@ -1,0 +1,37 @@
+{
+  "name": "avos-core",
+  "version": "1.0.0",
+  "description": "AVOS — Autonomous Venture Operating System Core Plane",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "db:migrate": "tsx src/storage/migrator.ts"
+  },
+  "keywords": [
+    "autonomous-agent",
+    "operating-system",
+    "task-orchestration",
+    "policy-enforcement"
+  ],
+  "author": "AVOS Team",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "pg": "^8.13.3",
+    "pino": "^9.6.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  }
+}
