@@ -58,6 +58,17 @@ describe('AVOS API Control Plane End-to-End Tests', () => {
     expect(body.emergencyStop.stopped).toBe(false);
   });
 
+  it('GET /dashboard serves HTML control center UI', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/dashboard',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('AVOS Control Center');
+  });
+
   it('rejects /api/projects without valid token', async () => {
     const res = await app.inject({
       method: 'GET',

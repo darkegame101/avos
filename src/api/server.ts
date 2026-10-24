@@ -15,6 +15,7 @@ import {
   ResumeEmergencyStopDtoSchema,
   ActionClassEnum,
 } from '../core/models';
+import { getDashboardHtml } from './dashboardHtml';
 import { z } from 'zod';
 
 export interface AppServices {
@@ -61,6 +62,15 @@ export function buildServer(services: AppServices): FastifyInstance {
       emergencyStop: stopStatus,
       worker: workerStatus,
     });
+  });
+
+  // --- Admin Dashboard (Web UI) ---
+  app.get('/', async (_req, reply) => {
+    return reply.type('text/html').send(getDashboardHtml());
+  });
+
+  app.get('/dashboard', async (_req, reply) => {
+    return reply.type('text/html').send(getDashboardHtml());
   });
 
   // --- Projects Endpoints ---
