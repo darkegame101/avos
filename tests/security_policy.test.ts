@@ -248,4 +248,66 @@ describe('Security and Policy Enforcement Tests', () => {
       expect(redacted.nested.safeField).toBe('Hello World');
     });
   });
+
+  describe('Cross-Project Isolation & Budget Cap Tests', () => {
+    it('prohibits task in Project Beta from executing under Project Alpha approval', async () => {
+      await storage.createProject({
+        id: 'proj_beta',
+        name: 'Beta Venture',
+        status: 'ACTIVE',
+        budgetCeilingUsd: 100,
+        spentUsd: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const params = { action: 'deploy' };
+      const hash = computeParametersHash(params);
+
+      // Approval belongs to proj_alpha
+      await storage.createApproval({
+        id: 'app_cross_proj',
+        projectId: 'proj_alpha',
+        taskId: 'task_beta_attempt',
+        actionClass: 'social.publish',
+        targetResource: 'https://twitter.com/alpha',
+        parametersHash: hash,
+        rationale: 'Alpha promo',
+        estimatedCostUsd: 1.0,
+        budgetCeilingUsd: 5.0,
+        status: 'APPROVED',
+        approvedBy: 'owner',
+        approvedAt: new Date(),
+        expiresAt: new Date(Date.now() + 3600000),
+        createdAt: new Date(),
+      });
+
+      // Caller from proj_beta attempts to execute task_beta_attempt
+      await expect(
+        gateway.assertCanExecute({
+          projectId: 'proj_beta',
+          taskId: 'task_beta_attempt',
+          actionClass: 'social.publish',
+          targetResource: 'https://twitter.com/alpha',
+          parameters: params,
+          estimatedCostUsd: 1.0,
+          idempotencyKey: 'idem_cross_1',
+        })
+      ).rejects.toThrow();
+    });
+
+    it('blocks execution when proposed cost breaches project budget ceiling', async () => {
+      // Proj alpha has $100 ceiling, current spent 0. Proposing $105 must fail!
+      await expect(
+        gateway.assertCanExecute({
+          projectId: 'proj_alpha',
+          taskId: 'task_over_budget',
+          actionClass: 'read.public',
+          parameters: {},
+          estimatedCostUsd: 105.0,
+          idempotencyKey: 'idem_over_budget_1',
+        })
+      ).rejects.toThrow(/budget ceiling exceeded/);
+    });
+  });
 });

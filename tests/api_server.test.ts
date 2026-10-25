@@ -170,4 +170,64 @@ describe('AVOS API Control Plane End-to-End Tests', () => {
     expect(report.emergencyStop.globalStopped).toBe(true);
     expect(report.emergencyStop.reason).toBe('Operator triggered maintenance pause');
   });
+
+  it('attaches security headers to all responses', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/health',
+    });
+
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['strict-transport-security']).toContain('max-age=31536000');
+  });
+
+  it('rejects malformed task input payloads with 400 Bad Request', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: { authorization: ownerTokenHeader },
+      payload: {
+        // missing required fields: projectId, title, actionClass, idempotencyKey
+        invalidField: 12345,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('Validation failed');
+  });
+
+  it('rejects caller asserting owner in JSON body without valid Bearer token', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects',
+      payload: {
+        id: 'proj_hacked',
+        name: 'Hacked Venture',
+        approver: 'owner',
+        role: 'admin',
+        isOwner: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe('Unauthorized');
+  });
+
+  it('enforces rate limiting when request burst exceeds threshold', async () => {
+    // Send 125 rapid requests to trigger 120 req/min limit
+    let wasRateLimited = false;
+    for (let i = 0; i < 125; i++) {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/health',
+      });
+      if (res.statusCode === 429) {
+        wasRateLimited = true;
+        expect(res.json().error).toBe('Too Many Requests');
+        break;
+      }
+    }
+    expect(wasRateLimited).toBe(true);
+  });
 });

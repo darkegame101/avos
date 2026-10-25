@@ -83,6 +83,13 @@ export class ExecutionGateway {
         );
       }
 
+      // Verify exact project match (Hermetic Project Isolation)
+      if (approval.projectId !== req.projectId) {
+        throw new ApprovalMissingOrInvalidError(
+          `Project isolation violation: approval belongs to project '${approval.projectId}', requested for '${req.projectId}'`
+        );
+      }
+
       // Verify budget ceiling
       if (req.estimatedCostUsd > approval.budgetCeilingUsd) {
         throw new ApprovalMissingOrInvalidError(

@@ -35,6 +35,35 @@ export function buildServer(services: AppServices): FastifyInstance {
     logger: false, // Custom audit logging handles structured events
   });
 
+  // Security Headers & Rate Limiting Hook
+  const requestCounts = new Map<string, { count: number; resetAt: number }>();
+  app.addHook('onRequest', async (req, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    reply.header('X-XSS-Protection', '1; mode=block');
+
+    // Throttling: 120 requests per minute per IP
+    const ip = req.ip || '127.0.0.1';
+    const now = Date.now();
+    const windowMs = 60000;
+    const maxRequests = 120;
+
+    let record = requestCounts.get(ip);
+    if (!record || record.resetAt < now) {
+      record = { count: 1, resetAt: now + windowMs };
+      requestCounts.set(ip, record);
+    } else {
+      record.count++;
+      if (record.count > maxRequests) {
+        return reply.status(429).send({
+          error: 'Too Many Requests',
+          message: 'Rate limit exceeded. Please throttle your requests.',
+        });
+      }
+    }
+  });
+
   // Global auth hook for /api/ routes
   const requireOwnerAuth = async (req: FastifyRequest, reply: FastifyReply) => {
     const authHeader = req.headers.authorization;

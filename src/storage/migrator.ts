@@ -15,7 +15,9 @@ export async function runMigrations(databaseUrl: string = config.databaseUrl): P
       );
     `);
 
-    const migrationsDir = path.join(__dirname, '../../migrations');
+    const defaultDir = path.join(__dirname, '../../migrations');
+    const cwdDir = path.join(process.cwd(), 'migrations');
+    const migrationsDir = fs.existsSync(defaultDir) ? defaultDir : cwdDir;
     if (!fs.existsSync(migrationsDir)) {
       console.log('No migrations directory found.');
       return;
