@@ -11,116 +11,142 @@
 
 - **Repository Remote:** `https://github.com/darkegame101/avos.git`
 - **Active Branch:** `main` (tracked directly with `origin/main`)
-- **Latest Verified Commit:** `e22b700` (*security(gate): verify execution boundary, purge credentials, harden SSRF, and add pre-deployment audit report*)
-- **GitHub Actions CI Status:**
-  - **Run ID:** `40163040146`
-  - **Status:** `completed`
-  - **Conclusion:** **`success` (GREEN)**
-  - **CI Workflow Steps Verified:**
-    1. Initialize containers (`postgres:16-alpine`) — SUCCESS
-    2. Checkout Code — SUCCESS
-    3. Setup Node.js 22 & cache — SUCCESS
-    4. Install Dependencies (`npm ci`) — SUCCESS
-    5. Typecheck TypeScript (`tsc`) — SUCCESS
-    6. Run Database Migrations (`npm run db:migrate`) — SUCCESS
-    7. Run Full Test Suite (Unit, Integration, Security, PostgreSQL) — SUCCESS
-- **Local Test Suite:** **49/49 tests passed** across 7 test suites (`npm test`). Build passes (`npm run build`).
+- **Current `main` HEAD Commit:** `024bdb18da8ac7db040c0f7c9f9ab3c3faaa7dcd` (`024bdb1`)
+  - **Commit Message:** `docs: sync STATUS.md and PREDEPLOYMENT_GATE_REPORT.md with verified CI Run 40163040146`
+  - **GitHub Actions CI Run:** [Run #40163132384](https://github.com/darkegame101/avos/actions/runs/40163132384)
+  - **CI Status:** `completed` / `success` **(GREEN)**
+- **Prior Code & Security Hardening Commit:** `e22b70085393a8f60d7b50f707d1ca169f306831` (`e22b700`)
+  - **Commit Message:** `security(gate): verify execution boundary, purge credentials, harden SSRF, and add pre-deployment audit report`
+  - **GitHub Actions CI Run:** [Run #40163040146](https://github.com/darkegame101/avos/actions/runs/40163040146)
+  - **CI Status:** `completed` / `success` **(GREEN)**
+
+### Sự khác biệt kỹ thuật giữa `024bdb1` và `e22b700`:
+- **Commit `e22b700` (Core Code & Hardening):** Là commit mã nguồn triển khai toàn bộ các chốt chặn an ninh:
+  1. Loại bỏ thông tin xác thực thử nghiệm trong file test; tạo role [migrations/002_least_privilege_user.sql](file:///e:/AVOS-AI-Agent-Handoff/migrations/002_least_privilege_user.sql) cho `avos_app_user`.
+  2. Bổ sung phòng thủ SSRF, chống DNS Rebinding qua `validateTargetUrlAsync`, bắt buộc manual redirect và chặn các giao thức mạng nguy hiểm (`ws:`, `wss:`, `ftp:`) trong [src/adapters/browserSandbox.ts](file:///e:/AVOS-AI-Agent-Handoff/src/adapters/browserSandbox.ts).
+  3. Bổ sung HTTP Security Headers, cơ chế rate limiting (120 req/min) và chặn mạo danh body trong [src/api/server.ts](file:///e:/AVOS-AI-Agent-Handoff/src/api/server.ts).
+  4. Bổ sung cơ chế cô lập dự án chéo trong [src/gateway/executionGateway.ts](file:///e:/AVOS-AI-Agent-Handoff/src/gateway/executionGateway.ts).
+  5. Thêm negative attack tests trong các file kiểm thử, nâng tổng số test lên 49 tests.
+- **Commit `024bdb1` (Documentation Synchronization):** Là commit đồng bộ tài liệu, **không thay đổi một dòng code nào** (`0 files code changed`). Commit này chỉ cập nhật 2 dòng trong `docs/STATUS.md` và `docs/PREDEPLOYMENT_GATE_REPORT.md` để ghi nhận commit SHA `e22b700` và CI Run ID `40163040146`.
+- **Cả hai commit đều đã được GitHub Actions kiểm thử độc lập và đạt kết quả 100% SUCCESS (GREEN).**
 
 ---
 
-## 2. Execution Boundary Integrity & Bypass Analysis
+## 2. Phân Định Ba Tầng Nhận Thức (Epistemic Classification)
 
-### Can any caller bypass the Execution Gateway?
-**NO.** A full architectural trace confirms that:
-1. **API Layer (`src/api/server.ts`):** Has **ZERO** direct dependencies or references to `IRuntimeAdapter`. Tasks submitted via `POST /api/tasks` are solely stored in the database with status `PENDING_APPROVAL` (if gated) or `QUEUED` (if safe).
-2. **Worker Pool (`src/queue/workerManager.ts`):** Workers dequeue tasks via PostgreSQL atomic `SKIP LOCKED` leases and dispatch exclusively through `ExecutionGateway.executeTask(task, adapter)`.
-3. **Execution Gateway (`src/gateway/executionGateway.ts`):** Enforces 5 mandatory gates in hard code before `adapter.submit(...)`:
-   - `Gate 1: Emergency Stop Check` (Global & Project-scoped). Tested in [tests/emergency_stop.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/emergency_stop.test.ts).
-   - `Gate 2: Action Policy Engine` (Deny-by-default for unknown actions). Tested in [tests/security_policy.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/security_policy.test.ts).
-   - `Gate 3: Scope & Approval Verification` (Verifies unexpired status, matching target, matching project ID, and verifies cryptographic SHA-256 parameter hash against tampering). Tested in [tests/security_policy.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/security_policy.test.ts).
-   - `Gate 4: Budget Ceiling Verification` (Ensures project ceiling and $50/mo global portfolio cap are not exceeded). Tested in [tests/security_policy.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/security_policy.test.ts).
-   - `Gate 5: Two-Phase Idempotency Lock` (Prevents concurrent duplicate side effects). Tested in [tests/idempotency_reliability.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/idempotency_reliability.test.ts).
+Theo nguyên tắc minh bạch, báo cáo phân loại rõ ràng mọi khẳng định an ninh và vận hành thành 3 nhóm:
 
----
+### Tầng 1: Đã kiểm chứng thực tế (Empirically Verified)
+*Các khẳng định có dữ liệu hoặc kết quả chạy máy đo lường được trực tiếp:*
+1. **Kiểm thử tự động:** 49/49 automated tests chạy thành công trên 7 test suites trong Vitest cục bộ và trên GitHub Actions CI runner (`ubuntu-latest` với container `postgres:16-alpine`).
+2. **Biên dịch & Kiểu dữ liệu:** `npm run build` (`tsc`) biên dịch sạch sẽ với exit code 0.
+3. **Vệ sinh bí mật:** Lệnh `git grep -n "123456"` trả về 0 kết quả trên toàn bộ mã nguồn và lịch sử tracked files hiện tại.
+4. **Cơ chế khóa đồng thời:** Test atomic leasing với `SELECT FOR UPDATE SKIP LOCKED` trong PostgreSQL đã chứng minh worker thứ hai nhận `null` khi tác vụ đang bị khóa bởi worker thứ nhất.
+5. **Giá niêm yết dịch vụ:** Giá gói máy chủ Lightsail `medium_2_0` (2 vCPU, 4GB RAM) được niêm yết chính thức là $20.00/tháng trên bảng giá công khai của AWS.
 
-## 3. Security Hardening & Purge Verification
+### Tầng 2: Suy luận từ cấu trúc mã nguồn (Inferred / Structural Logic)
+*Các khẳng định dựa trên logic kiến trúc code nhưng chưa trải qua tải thực tế lâu dài:*
+1. **Khả năng chống bypass ranh giới:** Suy luận từ việc kiến trúc mã nguồn không truyền `IRuntimeAdapter` vào `buildServer(services)`, và Worker chỉ thực thi qua `ExecutionGateway.executeTask`.  
+   *Giới hạn suy luận:* Đây là ranh giới logic ở tầng TypeScript. Nếu trong tương lai có thêm dependency bên thứ ba hoặc cấu hình mở rộng không kiểm soát, vẫn có thể phát sinh rủi ro monkey-patching hoặc side-channel.
+2. **Khả năng chịu tải & ổn định:** Suy luận từ các test concurrency ngắn hạn. Hệ thống chưa trải qua kiểm thử ngâm (soak test) nhiều ngày trong điều kiện mạng internet thực tế (nguy cơ rò rỉ bộ nhớ của Chromium headless, cạn kiệt connection pool khi database bị trễ mạng).
+3. **Hành vi mạng đám mây:** Cơ chế anti-SSRF hoạt động chuẩn xác trong môi trường kiểm thử; tuy nhiên khi chạy trên AWS Lightsail thực tế, cấu hình phân giải DNS nội bộ của AWS VPC (như `169.254.169.253` DNS resolver) cần tiếp tục được theo dõi.
 
-### 3.1 PostgreSQL Credentials Audit & Hardening
-- **Audit Assessment:** Historical command and test logs were reviewed. In previous local testing sessions, connection attempts probed default/weak credentials against the local PostgreSQL service.
-- **Action Taken:**
-  - Audited full repository and git log history.
-  - Purged all hardcoded credentials from `tests/postgres_integration.test.ts` and documentation; replaced with environment variables (`DATABASE_URL`, `PGPASSWORD`) and safe placeholders.
-  - Removed scratch testing files.
-  - Verified with `git grep`: **zero hardcoded credentials remain** in the codebase.
-  - Created [migrations/002_least_privilege_user.sql](file:///e:/AVOS-AI-Agent-Handoff/migrations/002_least_privilege_user.sql) to provision a restricted application role `avos_app_user` (NO SUPERUSER, NO CREATEDB, limited exclusively to `avos_db` tables).
-  - **CRITICAL RECOMMENDATION TO OWNER:** If the sequential password tested locally was the actual password of your local Windows PostgreSQL `postgres` superuser account, **change it immediately** via psql/pgAdmin (`ALTER USER postgres WITH PASSWORD '...';`). Ensure distinct, high-entropy secrets for each environment. Never commit `.env` or reuse credentials across local, staging, or production.
-
-### 3.2 Advanced Anti-SSRF & Browser Research Sandbox
-- Implemented in [src/adapters/browserSandbox.ts](file:///e:/AVOS-AI-Agent-Handoff/src/adapters/browserSandbox.ts):
-  - **Hard Concurrency Cap:** Maximum 1 concurrent session (`MAX_CONCURRENT_SESSIONS = 1`). Verified via `BrowserConcurrencyExceededError`.
-  - **Anti-SSRF Protection:** Blocks loopback (`127.0.0.0/8`, `::1`), private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`, `fe80::/10`), AWS metadata (`169.254.169.254`, `[fd00:ec2::254]`), and encoded formats (dword, hex, octal, IPv4-mapped IPv6).
-  - **DNS Rebinding Protection:** Asynchronous DNS resolution via `validateTargetUrlAsync` verifies that domain names do not resolve to private or loopback IPs before fetching.
-  - **Protocol Whitelist:** Strictly enforces `http:` and `https:`. Rejects `ws:`, `wss:`, `ftp:`, `file:`, `data:`, `javascript:`.
-  - **Manual Redirect Interception:** Uses `redirect: 'manual'` up to 3 redirects, validating each intermediate destination against anti-SSRF rules to prevent open-redirect exploitation.
-  - **Action Restriction:** Strictly permits `read.public` only. Chained attempts to execute `social.publish` or `social.message` are blocked.
-
-### 3.3 Production API Defense & Log Redaction
-- Implemented in [src/api/server.ts](file:///e:/AVOS-AI-Agent-Handoff/src/api/server.ts) & [src/core/security/redactor.ts](file:///e:/AVOS-AI-Agent-Handoff/src/core/security/redactor.ts):
-  - Constant-time Bearer token comparison (`crypto.timingSafeEqual`).
-  - Total rejection of body claims (`{ "approver": "owner" }`). Verified in [tests/api_server.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/api_server.test.ts).
-  - Security headers attached to every response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
-  - IP-based rate limiting (120 req/min). Verified in [tests/api_server.test.ts](file:///e:/AVOS-AI-Agent-Handoff/tests/api_server.test.ts).
-  - Recursive redaction of sensitive credentials (`password`, `token`, `secret`, `apiKey`, `database_url`).
+### Tầng 3: Chưa xác minh / Cần chủ sở hữu xác nhận (Unverified / Blocked)
+*Các hạng mục chưa có dữ liệu thực tế và bắt buộc phải có sự tham gia của con người:*
+1. **Tính hợp lệ của $120 AWS Credit:** Chưa xác minh được mã credit này có cho phép áp dụng cho `Amazon Lightsail` hay bị loại trừ, và ngày hết hạn cụ thể là khi nào.
+2. **Tài nguyên Cloud:** Chưa tạo bất kỳ VPS, Static IP, Firewall rule hay S3 bucket nào trên AWS.
+3. **Chứng chỉ TLS thực tế:** Chưa kiểm chứng việc phát hành chứng chỉ Let's Encrypt trên tên miền và địa chỉ IP công khai thực tế.
+4. **Mật khẩu cơ sở dữ liệu cục bộ của chủ sở hữu:** Agent không truy cập và không xác minh được liệu chủ sở hữu đã đổi mật khẩu root của PostgreSQL trên máy cá nhân hay chưa.
 
 ---
 
-## 4. AWS Lightsail Verified vs. Estimated Costs
+## 3. Quản Lý Thông Tin Xác Thực PostgreSQL
 
-| Item | Monthly Amount | Classification | Notes |
+- **Ghi nhận trạng thái:** Trong các phiên thử nghiệm cục bộ trước đây, mã nguồn kiểm thử từng thử kết nối với mật khẩu thử nghiệm mặc định vào cổng PostgreSQL cục bộ.
+- **Xử lý phía kho mã nguồn:** Toàn bộ thông tin này đã được gỡ bỏ hoàn toàn khỏi mã nguồn, test script và tài liệu. Dự án hiện sử dụng biến môi trường chuẩn (`DATABASE_URL`, `PGPASSWORD`) với các giá trị placeholder.
+- **Yêu cầu đối với chủ sở hữu:** 
+  > [!NOTE]
+  > Agent tuyệt đối không truy cập, không đoán và không in lại mật khẩu.  
+  > Chủ sở hữu cần **tự xác nhận** đã đổi mật khẩu của tài khoản `postgres` (superuser) trên dịch vụ PostgreSQL của máy tính cá nhân nếu mật khẩu thử nghiệm trước đây từng được dùng làm mật khẩu thật. Không tái sử dụng mật khẩu đó cho bất kỳ môi trường nào khác.
+
+---
+
+## 4. Chi Phí & Hướng Dẫn Chủ Sở Hữu Kiểm Tra AWS Credits
+
+### 4.1 Bảng chi tiết chi phí dự kiến
+| Hạng mục | Chi phí / tháng | Phân loại | Căn cứ & Ghi chú |
 |---|---|---|---|
-| **Lightsail Instance** (2 vCPU, 4GB RAM, 80GB SSD) | **$20.00** | **VERIFIED AWS PRICING** | Official AWS Lightsail bundle price; covered by AWS credits if applicable. |
-| **Static IPv4** | **$0.00** | **VERIFIED AWS PRICING** | 1 Static IPv4 included free while attached to running instance. |
-| **Outbound Data Transfer** (Up to 3 TB) | **$0.00** | **VERIFIED AWS PRICING** | Included in Lightsail bundle. |
-| **S3 Glacier Instant Retrieval Backup** | **~$0.50** | **ESTIMATED USAGE** | ~10 GB compressed SQL dumps @ $0.004/GB + PUT requests. |
-| **Total Projected AWS Spend** | **$20.50 / month** | | **~5.8 months of runway** with $120 AWS credit. |
+| **Lightsail Instance (`medium_2_0`)**<br>(2 vCPU, 4GB RAM, 80GB SSD, 3TB Data) | **$20.00** | **ĐÃ KIỂM CHỨNG THEO AWS PRICING** | Giá niêm yết chính thức của AWS tại `ap-southeast-1` (Singapore) và `us-east-1` (N. Virginia). |
+| **Static IPv4 đính kèm** | **$0.00** | **ĐÃ KIỂM CHỨNG THEO AWS PRICING** | Miễn phí 1 IP tĩnh khi đang gắn vào máy chủ đang chạy. |
+| **Băng thông ra ngoài (Dưới 3 TB)** | **$0.00** | **ĐÃ KIỂM CHỨNG THEO AWS PRICING** | Đã bao gồm trong bundle của Lightsail. |
+| **TLS/SSL Certificate** | **$0.00** | **ĐÃ KIỂM CHỨNG MIỄN PHÍ** | Let's Encrypt tự động cấp phát. |
+| **Lưu trữ Backup S3 Glacier Instant Retrieval** | **~$0.50** | **ƯỚC TÍNH THEO SỬ DỤNG** | Tính trên ~10 GB SQL dump nén luân chuyển 30 ngày ($0.004/GB/tháng) + phí PUT requests. |
+| **Snapshot Lightsail tự động (Tùy chọn)** | **~$0.10 – $0.25** | **ƯỚC TÍNH THEO SỬ DỤNG** | Phí lưu trữ snapshot vi sai là $0.05/GB-tháng. |
+| **TỔNG CHI PHÍ AWS DỰ KIẾN** | **~$20.50 / tháng** | | **Thời gian hoạt động dự kiến: ~5.8 tháng** nếu $120 Credit hợp lệ. |
 
-### Excluded / Variable Items:
-1. **AWS Credit Conditions Verification:** Owner must check `AWS Billing -> Credits` to confirm whether `Amazon Lightsail` is an eligible product under the credit code and verify the expiration date.
-2. **Third-Party LLM Token Fees:** API calls to commercial LLMs (OpenAI, Anthropic) are billed directly by those vendors and **do not** consume AWS credits.
-3. **Unattached Static IP Fee:** If the Lightsail instance is deleted but the static IP is left unattached, AWS bills $0.005/hour ($3.60/month). The automated teardown script releases the IP immediately.
+### 4.2 Hướng dẫn chủ sở hữu tự kiểm tra AWS Credits (Không cần cấp quyền Billing/IAM cho agent)
+Để bảo đảm an toàn tuyệt đối, chủ sở hữu tự thực hiện các bước sau trên trình duyệt của mình:
 
----
-
-## 5. Remaining Blockers & Decisions Awaiting Owner Input
-
-1. **Blocker 1 — AWS Credit Verification:**
-   - Owner to check AWS Billing Console (`Billing -> Credits`) to verify the exact balance and expiration date of the reported $120 credit, and confirm Lightsail is included.
-2. **Blocker 2 — Explicit Approval for VPS Creation:**
-   - Owner to provide explicit approval to launch the Lightsail instance and specify the target Region (e.g. `ap-southeast-1` Singapore or `us-east-1` N. Virginia).
-3. **Blocker 3 — Superuser Password Confirmation:**
-   - Owner to confirm local Windows PostgreSQL superuser password has been changed from any default/weak credentials.
-
----
-
-## 6. Rollback & Teardown Protocol
-
-If staging needs to be destroyed at any time:
-```bash
-# 1. Take final backup
-docker compose exec postgres pg_dump -U avos_app_user avos_db > final_backup.sql
-
-# 2. Release static IP (prevents idle charge)
-aws lightsail detach-static-ip --static-ip-name "avos-staging-ip"
-aws lightsail release-static-ip --static-ip-name "avos-staging-ip"
-
-# 3. Terminate instance
-aws lightsail delete-instance --instance-name "avos-staging"
-```
+1. **Đăng nhập vào AWS Console:** Truy cập [https://console.aws.amazon.com/](https://console.aws.amazon.com/) bằng tài khoản root hoặc IAM user cá nhân.
+2. **Kiểm tra thông tin Credit:**
+   - Mở menu góc trên bên phải (tên tài khoản) → Chọn **Billing and Cost Management**.
+   - Ở thanh điều hướng bên trái, chọn **Credits** (hoặc truy cập trực tiếp: `https://console.aws.amazon.com/billing/home#/credits`).
+   - Tìm khoản tín dụng $120 và kiểm tra 3 thông số then chốt:
+     - **Applicable Products:** Xác nhận xem danh sách có chứa `Amazon Lightsail` hoặc ghi `All AWS Services` hay không. *Nếu ghi rõ "Excludes Lightsail", chi phí $20/tháng sẽ trừ trực tiếp vào thẻ ngân hàng.*
+     - **Expiration Date:** Xác nhận thời hạn hết hạn còn ít nhất 3-6 tháng.
+     - **Remaining Balance:** Xác nhận số dư còn đủ $120.
+3. **Thiết lập cảnh báo chi phí (AWS Budgets Alert):**
+   - Trong **Billing and Cost Management**, chọn **Budgets** → Chọn **Create budget**.
+   - Chọn **Cost budget (Simplified)**.
+   - Đặt ngưỡng ngân sách: **$25.00 / month**.
+   - Điền email cá nhân để nhận cảnh báo ngay lập tức nếu chi phí vượt quá $25, đảm bảo không có chi phí ẩn ngoài tầm kiểm soát.
 
 ---
 
-## 7. Strict Non-Action Guarantee
+## 5. Rà Soát Điều Kiện Vận Hành & Các Giới Hạn Kỹ Thuật Còn Tồn Tại
+
+### 5.1 Quyền IAM Tối Thiểu (`AVOSLightsailDeployer`)
+- **Phạm vi cấp quyền:** Chỉ cho phép các thao tác cần thiết trên dịch vụ Lightsail (`lightsail:*Instance*`, `lightsail:*StaticIp*`, `lightsail:*PublicPorts*`) và quyền ghi/đọc vào đúng bucket backup `arn:aws:s3:::avos-backups-*`.
+- **Cấm tuyệt đối (Explicit Deny):** Cấm `iam:*`, `aws-portal:*`, `ce:*` (Cost Explorer), `organizations:*`, và cấm tạo EC2 đắt tiền (`ec2:RunInstances`).
+- **Giới hạn kỹ thuật:** Dịch vụ Lightsail của AWS hiện tại chưa hỗ trợ ràng buộc ARN cấp tài nguyên chi tiết cho tất cả hành động tạo mới (ví dụ `lightsail:CreateInstances` bắt buộc khai báo `"Resource": "*"`).
+
+### 5.2 Cơ Chế Rollback & Giới Hạn
+- **Điều kiện kích hoạt rollback:**
+  1. Nhận email cảnh báo chi phí AWS Budget vượt ngưỡng $25.
+  2. Phát hiện máy chủ bị crash loop hoặc không phản hồi kiểm tra sức khỏe quá 15 phút.
+  3. Kích hoạt Emergency Stop mà không thể khắc phục nguyên nhân.
+  4. Yêu cầu chủ động từ chủ sở hữu.
+- **Quy trình thực hiện:**
+  ```bash
+  # 1. Xuất bản backup cuối cùng từ container PostgreSQL
+  docker compose exec postgres pg_dump -U avos_app_user avos_db > final_backup.sql
+  
+  # 2. Giải phóng Static IP (BẮT BUỘC để tránh phí $3.60/tháng của IP nhàn rỗi)
+  aws lightsail detach-static-ip --static-ip-name "avos-staging-ip"
+  aws lightsail release-static-ip --static-ip-name "avos-staging-ip"
+  
+  # 3. Hủy bỏ máy chủ Lightsail
+  aws lightsail delete-instance --instance-name "avos-staging"
+  ```
+- **Giới hạn kỹ thuật:** Lệnh `delete-instance` là vĩnh viễn; mọi dữ liệu trên ổ SSD cục bộ chưa kịp dump ra file sẽ bị xóa. RPO (Recovery Point Objective) tối đa là 24 giờ dựa trên bản sao lưu S3 gần nhất.
+
+### 5.3 Giao Thức Mạng, SSH & TLS
+- **Firewall & SSH:** Cổng 22 SSH chỉ mở cho địa chỉ IP tĩnh của chủ sở hữu (`<OWNER_IP>/32`). Đăng nhập bằng mật khẩu bị vô hiệu hóa; bắt buộc dùng khóa SSH Ed25519.
+  - *Giới hạn kỹ thuật:* Nếu chủ sở hữu sử dụng mạng internet gia đình có IP động (Dynamic IP), khi nhà mạng đổi IP, chủ sở hữu sẽ tạm thời không thể SSH cho đến khi cập nhật lại CIDR trên giao diện web của Lightsail.
+- **TLS/HTTPS:** Sử dụng chứng chỉ Let's Encrypt qua reverse proxy (Caddy/Nginx).
+  - *Giới hạn kỹ thuật:* Việc cấp phát chứng chỉ HTTPS phụ thuộc vào việc bản ghi DNS công khai đã trỏ chính xác về Static IP. Nếu DNS bị trễ hoặc cấu hình sai, HTTPS sẽ không thể khởi tạo tự động.
+
+---
+
+## 6. Kết Luận & Điểm Dừng Gate 4
+
+Hệ thống đã hoàn tất toàn bộ các bước kiểm tra an ninh, vệ sinh mã nguồn, đồng bộ tài liệu và chứng minh qua kiểm thử tự động. 
 
 > [!IMPORTANT]
-> **No cloud instances, storage volumes, or paid resources have been created.**  
-> AVOS remains completely paused at Gate 4. Triển khai Gate 5 chỉ được thực hiện sau khi chủ sở hữu ký duyệt riêng.
+> **Tuân thủ kỷ luật tiền triển khai (Pre-Deployment Gate):**
+> - **DỪNG TẠI GATE 4.**
+> - **KHÔNG** tạo VPS Lightsail, **KHÔNG** cấp phát Static IP, **KHÔNG** tạo S3 bucket.
+> - **KHÔNG** phát sinh bất kỳ khoản phí nào ($0.00).
+> - Chờ chủ sở hữu xác nhận 2 điểm:
+>   1. Đã tự kiểm tra tính hợp lệ của $120 credit đối với Lightsail trên AWS Billing Console.
+>   2. Quyết định phê duyệt chính thức bằng lệnh để bước sang Gate 5.

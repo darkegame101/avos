@@ -192,7 +192,20 @@ aws lightsail delete-instance --instance-name "avos-staging"
 
 ---
 
-## 7. Strict Non-Action Guarantee
+## 7. Known Limitations & Operational Constraints
+
+1. **IAM Policy Granularity in Lightsail:**
+   AWS Lightsail does not support granular, resource-level ARN constraints for all instance lifecycle actions (e.g., `lightsail:CreateInstances` requires `"Resource": "*"`). The policy mitigates this by applying an explicit deny on account, billing, organization, and EC2 creation permissions.
+2. **Rollback & Data Loss Risk:**
+   The `aws lightsail delete-instance` command permanently purges instance SSD storage. If a database dump fails or is aborted before termination, uncommitted data on the instance volume cannot be recovered. RPO (Recovery Point Objective) is limited to the last successful daily dump.
+3. **SSH Access with Dynamic IP:**
+   Firewall rule `{"fromPort": 22, "toPort": 22, "cidrs": ["<OWNER_IP>/32"]}` blocks unauthorized brute-force attempts. However, if the owner connects via a residential ISP with a dynamic public IP address, any IP lease change will temporarily block SSH access until the IP is updated via the AWS Lightsail Web Console.
+4. **Automated TLS Issuance:**
+   Let's Encrypt automated HTTP-01 challenge requires an active, public DNS A record pointing to the allocated static IP. DNS propagation delays will postpone automated certificate provisioning.
+
+---
+
+## 8. Strict Non-Action Guarantee
 
 > [!IMPORTANT]
 > **NO CLOUD INSTANCES, STORAGE BUCKETS, OR BILLABLE RESOURCES HAVE BEEN CREATED.**  
